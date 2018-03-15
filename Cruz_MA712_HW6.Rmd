@@ -1,0 +1,208 @@
+---
+title: "Cruz_MA712_HW6"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+library(Zelig)
+library(texreg)
+library(mvtnorm)
+library(radiant.data)
+library(sjmisc)
+library(lattice)
+library(dplyr)
+```
+
+
+#Introduction - Student DATA
+
+In this homework, I will conduct a regression analysis on student data of a secondary school. My focus will be examining the effects of age, sex (IV's), reason they chose this secondary school to determine if these factors have an effect on extra curricular activities (ext_act)(DV).
+```{r}
+library(radiant.data)
+library(readr)
+  student <- read_csv("/Users/cruz/Desktop/students.csv", col_names = TRUE)
+ head(student)
+```
+#Changing the form of of the DV
+```{r}
+
+student <- student%>% 
+  mutate(ext_act = as.integer(activities))
+
+```
+#Recoding using ifelse() function
+```{r}
+student3 <- student%>%
+  mutate(ext_act= ifelse(activities =="yes",1,0))
+head(student3)
+```
+
+#Filtering and Cleaning Student Data 
+```{r}
+student3 %>% 
+  select(higher, activities, ext_act, everything())
+head(student3)
+
+
+student3<-na.omit(student3)
+head(student3)
+
+```
+
+
+#Regression Analysis of Student Data
+The result display that age has a negative effect on extra-curricular activities with a (-.169). When looking at the effect of sex we see that males are (.450) more likely than females to be in extra-curricular activities which was also statistically significant. In addition, those who attended this particular secondary school for reputation reasons were (.684) more likely than any other reason to be involved in extra-curricular activities which was statistically significant.
+
+```{r}
+nm0 <- glm(ext_act ~ age + sex + reason + goout, family = binomial, data = student3)
+summary(nm0)
+```
+
+```{r}
+nm1 <- glm(ext_act ~ age + sex + reason + goout, family = binomial, data = student3)
+summary(nm1)
+```
+
+```{r}
+nm2 <- glm(ext_act ~ age + sex + reason + goout + I(goout^2), family = binomial, data = student3)
+summary(nm2)
+```
+#AIC X BIC
+
+We see that model 1 or 2 best fit this data. Model 3 has a higher deviance than the other 2.
+```{r}
+library(texreg)
+screenreg(list(nm0, nm1,nm2))
+
+```
+```{r}
+htmlreg(list(nm0, nm1, nm2))
+```
+
+
+#Factor Function
+Identifying if the IV's in this analysis are in fact factors
+```{r}
+(l <- sapply(student3, function(x) is.factor(x)))
+```
+
+#Zelig EV, PV , FD Simulation Interpretations
+
+
+
+
+
+```{r}
+student3 <- student3%>%
+  mutate(age = as.numeric(age),
+         sex = as.factor(sex),
+         reason = as.factor(reason))
+
+z4hw.students <- zelig(ext_act ~ age + sex* reason + goout, model = "logit", data = student3)
+z4hw.set <- setx(z4hw.students, age = min(student3$age):max(student3$age))
+z4hw.sim <- sim(z4hw.students, z4hw.set)
+ci.plot(z4hw.sim)
+summary(z4hw.students)
+
+(l <- sapply(student3, function(x) is.factor(x)))
+
+```
+
+
+```{r}
+goout.range = min(student3$goout):max(student3$goout)
+x <- setx(z4hw.students, goout = goout.range)
+s <- sim(z4hw.students, x = x)
+ci.plot(s)
+```
+
+
+
+```{r}
+x <- setx(z4hw.students, sex = "M")
+x1 <- setx(z4hw.students, sex = "F")
+s <- sim(z4hw.students, x = x, x1 = x1)
+summary(s)
+
+```
+
+```{r}
+fd <- s$get_qi(xvalue="x1", qi="fd")
+summary(fd)
+```
+
+```{r}
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+ plot(s)
+```
+
+```{r}
+c1x <- setx(z4hw.students, sex = "M",ext_act )
+c1x1 <- setx(z4hw.students, sex = "F", ext_act)
+c1s <- sim(z4hw.students, x = c1x, x1 = c1x1)
+
+
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+plot(c1s)
+```
+
+
+```{r}
+c2x <- setx(z4hw.students, age, sex*reason)
+c2s <- sim(z4hw.students, x = c2x)
+
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+plot(c2s)
+```
+
+
+
+```{r}
+d1 <- c1s$get_qi(xvalue="x1", qi="fd")
+
+dfd <- as.data.frame(cbind(d1))
+head(dfd)
+```
+
+
+```{r}
+library(tidyr)
+
+tidd <- dfd %>% 
+  gather(sex, simv, 1:1)
+head(tidd)
+```
+
+
+```{r}
+library(dplyr)
+
+tidd %>% 
+  group_by(sex) %>% 
+  summarise(mode = mode(simv), sd = sd(simv))
+```
+
+
+```{r}
+library(ggplot2)
+
+ggplot(tidd, aes(simv)) + geom_histogram() + facet_grid(~sex) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
